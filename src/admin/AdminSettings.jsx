@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Settings,
   User,
@@ -108,33 +108,34 @@ function AdminSettings() {
   ];
 
   // API request helper
-  const request = async (url, options = {}) => {
-    if (!token) {
-      throw new Error("Your login token is missing. Please log in again.");
-    }
+  // API request helper
+const request = useCallback(async (url, options = {}) => {
+  if (!token) {
+    throw new Error("Your login token is missing. Please log in again.");
+  }
 
-    const response = await fetch(`${API_BASE_URL}${url}`, {
-      ...options,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        ...(options.body ? { "Content-Type": "application/json" } : {}),
-        ...options.headers,
-      },
-    });
+  const response = await fetch(`${API_BASE_URL}${url}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...options.headers,
+    },
+  });
 
-    const data = await response.json().catch(() => ({}));
+  const data = await response.json().catch(() => ({}));
 
-    if (!response.ok || data.success === false) {
-      throw new Error(
-        data.message || `Request failed with status ${response.status}`
-      );
-    }
+  if (!response.ok || data.success === false) {
+    throw new Error(
+      data.message || `Request failed with status ${response.status}`
+    );
+  }
 
-    return data;
-  };
+  return data;
+}, [token]);
 
   // Load settings into React state
-  const applySettings = (settings = {}) => {
+  const applySettings = useCallback((settings = {}) => {
     setGeneralSettings({
       platformName:
         settings.platformName ?? DEFAULTS.general.platformName,
@@ -209,7 +210,7 @@ function AdminSettings() {
     });
 
     setMaintenanceMode(settings.maintenanceMode ?? false);
-  };
+}, []);
 
   // Load platform settings from MongoDB
   useEffect(() => {
@@ -244,7 +245,7 @@ function AdminSettings() {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [request, applySettings]);
 
   // Load administrator profile
   useEffect(() => {
@@ -282,7 +283,7 @@ function AdminSettings() {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [request]);
 
   // Save all platform settings
   const saveSettings = async () => {
