@@ -39,6 +39,8 @@ function CreateBook() {
   const [outline, setOutline] = useState([]);
   const [createdBook, setCreatedBook] = useState(null);
 
+  const outlinePriceRupees = Math.max(0, Number(formData.chapters) - 4) * 5;
+
   // =====================================================
   // HANDLE FORM CHANGE
   // =====================================================
@@ -126,6 +128,7 @@ function CreateBook() {
         const paymentOrderId = await payForGeneration({
           token,
           paymentType: "outline",
+          chapterCount: Number(formData.chapters),
         });
 
         // STEP 4: RETRY WITH THE VERIFIED PAYMENT ORDER
@@ -430,6 +433,22 @@ function CreateBook() {
                     AI will generate a structured chapter outline
                     for your eBook.
                   </p>
+                </div>
+              </div>
+
+              {/* OUTLINE PRICE */}
+
+              <div className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h3 className="font-medium">Outline generation price</h3>
+                    <p className="mt-1 text-sm text-slate-400">
+                      First 4 chapters are free. Each additional chapter costs ₹5.
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-xl font-bold text-violet-300">
+                    {outlinePriceRupees === 0 ? "Free" : `₹${outlinePriceRupees}`}
+                  </div>
                 </div>
               </div>
 

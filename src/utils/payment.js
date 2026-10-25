@@ -35,7 +35,11 @@ const loadRazorpay = () =>
     document.body.appendChild(script);
   });
 
-export const payForGeneration = async ({ token, paymentType }) => {
+export const payForGeneration = async ({
+  token,
+  paymentType,
+  chapterCount,
+}) => {
   if (!token) {
     throw new Error("Please log in before making a payment.");
   }
@@ -44,11 +48,33 @@ export const payForGeneration = async ({ token, paymentType }) => {
     throw new Error("Invalid payment type.");
   }
 
+  // An outline payment is needed only for more than 4 chapters.
+  // Pricing: (chapter count - 4) * ₹5.
+  if (paymentType === "outline") {
+    const count = Number(chapterCount);
+
+    if (
+      !Number.isInteger(count) ||
+      count <= 4
+    ) {
+      throw new Error(
+        "A paid outline requires more than 4 chapters."
+      );
+    }
+  }
+
   await loadRazorpay();
 
+  // Ask the backend to create the order.
+  // The backend must calculate and validate the actual amount.
   const response = await axios.post(
     `${API_BASE_URL}/api/payments/create-order`,
-    { paymentType },
+    {
+      paymentType,
+      ...(paymentType === "outline"
+        ? { chapterCount: Number(chapterCount) }
+        : {}),
+    },
     {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -60,9 +86,12 @@ export const payForGeneration = async ({ token, paymentType }) => {
   const { keyId, orderId, amount, currency } = response.data;
 
   if (!keyId || !orderId || !amount || !currency) {
-    throw new Error("The server returned an invalid payment order.");
+    throw new Error(
+      "The server returned an invalid payment order."
+    );
   }
 
+  // Open Razorpay checkout and verify payment on the backend.
   return new Promise((resolve, reject) => {
     let finished = false;
 
@@ -72,11 +101,15 @@ export const payForGeneration = async ({ token, paymentType }) => {
       amount,
       currency,
       name: "AI eBook Creator",
+
       description:
         paymentType === "outline"
-          ? "One additional outline generation"
-          : "One additional chapter generation",
-      theme: { color: "#7c3aed" },
+          ? `Outline generation for ${Number(chapterCount)} chapters`
+          : "One additional chapter content generation",
+
+      theme: {
+        color: "#7c3aed",
+      },
 
       handler: async (paymentResponse) => {
         if (finished) return;
@@ -86,9 +119,12 @@ export const payForGeneration = async ({ token, paymentType }) => {
           await axios.post(
             `${API_BASE_URL}/api/payments/verify`,
             {
-              razorpay_order_id: paymentResponse.razorpay_order_id,
-              razorpay_payment_id: paymentResponse.razorpay_payment_id,
-              razorpay_signature: paymentResponse.razorpay_signature,
+              razorpay_order_id:
+                paymentResponse.razorpay_order_id,
+              razorpay_payment_id:
+                paymentResponse.razorpay_payment_id,
+              razorpay_signature:
+                paymentResponse.razorpay_signature,
             },
             {
               headers: {
@@ -98,6 +134,8 @@ export const payForGeneration = async ({ token, paymentType }) => {
             }
           );
 
+          // Return the verified order ID to the caller.
+          // The AI generation request can then use this ID.
           resolve(orderId);
         } catch (error) {
           reject(
@@ -125,7 +163,8 @@ export const payForGeneration = async ({ token, paymentType }) => {
 
       reject(
         new Error(
-          event.error?.description || "Payment failed. Please try again."
+          event.error?.description ||
+            "Payment failed. Please try again."
         )
       );
     });

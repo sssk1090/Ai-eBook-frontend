@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import axios from "axios";
 
@@ -17,6 +18,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../context/AuthContext";
 import { useBook } from "../context/BookContext";
+import { payForGeneration } from "../utils/payment";
 
 function Editor() {
   const navigate = useNavigate();
@@ -24,22 +26,10 @@ function Editor() {
   const { token } = useAuth();
   const { currentBook, setBook, clearBook } = useBook();
 
-  // --------------------------------------------------
-  // Chapters
-  // --------------------------------------------------
-
   const [chapters, setChapters] = useState([]);
   const [activeChapter, setActiveChapter] = useState(null);
 
-  // --------------------------------------------------
-  // Book visibility
-  // --------------------------------------------------
-
   const [visibility, setVisibility] = useState("private");
-
-  // --------------------------------------------------
-  // UI states
-  // --------------------------------------------------
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -47,10 +37,7 @@ function Editor() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // --------------------------------------------------
-  // Load chapters + visibility from BookContext
-  // --------------------------------------------------
-
+  // Load chapters and visibility from BookContext.
   useEffect(() => {
     if (!currentBook) {
       return;
@@ -67,8 +54,6 @@ function Editor() {
     }));
 
     setChapters(formattedChapters);
-
-    // Load current visibility
     setVisibility(currentBook.visibility || "private");
 
     if (formattedChapters.length > 0) {
@@ -76,18 +61,11 @@ function Editor() {
     }
   }, [currentBook]);
 
-  // --------------------------------------------------
-  // Current chapter
-  // --------------------------------------------------
-
   const currentChapter = chapters.find(
     (chapter) => chapter.id === activeChapter
   );
 
-  // --------------------------------------------------
-  // If user opens Editor directly
-  // --------------------------------------------------
-
+  // Show an error if the editor is opened without a book.
   useEffect(() => {
     if (!currentBook) {
       setError(
@@ -96,20 +74,14 @@ function Editor() {
     }
   }, [currentBook]);
 
-  // --------------------------------------------------
-  // Change chapter content
-  // --------------------------------------------------
-
+  // Update the active chapter content.
   const handleContentChange = (e) => {
     const newContent = e.target.value;
 
     setChapters((prevChapters) =>
       prevChapters.map((chapter) =>
         chapter.id === activeChapter
-          ? {
-              ...chapter,
-              content: newContent,
-            }
+          ? { ...chapter, content: newContent }
           : chapter
       )
     );
@@ -117,20 +89,14 @@ function Editor() {
     setSaved(false);
   };
 
-  // --------------------------------------------------
-  // Change visibility
-  // --------------------------------------------------
-
+  // Change book visibility.
   const handleVisibilityChange = (e) => {
     setVisibility(e.target.value);
     setSaved(false);
     setError("");
   };
 
-  // --------------------------------------------------
-  // Add chapter
-  // --------------------------------------------------
-
+  // Add a chapter.
   const handleAddChapter = () => {
     const newChapter = {
       id: `new-${Date.now()}`,
@@ -141,15 +107,11 @@ Start writing your chapter content here...`,
     };
 
     setChapters((prev) => [...prev, newChapter]);
-
     setActiveChapter(newChapter.id);
     setSaved(false);
   };
 
-  // --------------------------------------------------
-  // Delete chapter
-  // --------------------------------------------------
-
+  // Delete the active chapter.
   const handleDeleteChapter = () => {
     if (chapters.length === 1) {
       setError("A book must contain at least one chapter.");
@@ -178,10 +140,7 @@ Start writing your chapter content here...`,
     setError("");
   };
 
-  // --------------------------------------------------
-  // Save book to MongoDB
-  // --------------------------------------------------
-
+  // Save book to MongoDB.
   const handleSave = async () => {
     if (!currentBook?._id) {
       setError("Book ID not found. Please create the book again.");
@@ -204,8 +163,7 @@ Start writing your chapter content here...`,
           content: chapter.content || "",
         };
 
-        // Keep MongoDB _id for existing chapters.
-        // New chapters don't have _id yet.
+        // Preserve MongoDB IDs for existing chapters.
         if (
           chapter.id &&
           typeof chapter.id === "string" &&
@@ -221,9 +179,7 @@ Start writing your chapter content here...`,
         `${process.env.REACT_APP_API_URL}/api/books/${currentBook._id}`,
         {
           chapters: chaptersForDatabase,
-
-          // Save Private/Public setting
-          visibility: visibility,
+          visibility,
         },
         {
           headers: {
@@ -235,13 +191,9 @@ Start writing your chapter content here...`,
 
       const updatedBook = response.data.book;
 
-      // Update BookContext with latest MongoDB data
       setBook(updatedBook);
-
-      // Update visibility from database response
       setVisibility(updatedBook.visibility || "private");
 
-      // Convert returned MongoDB chapters back into editor format
       const updatedChapters = (updatedBook.chapters || []).map(
         (chapter, index) => ({
           id: chapter._id || `chapter-${index}`,
@@ -270,20 +222,16 @@ Start writing your chapter content here...`,
     } catch (error) {
       console.error("Save book error:", error);
 
-      const message =
+      setError(
         error.response?.data?.message ||
-        "Something went wrong while saving the book.";
-
-      setError(message);
+          "Something went wrong while saving the book."
+      );
     } finally {
       setSaving(false);
     }
   };
 
-  // --------------------------------------------------
-  // Delete entire book
-  // --------------------------------------------------
-
+  // Delete the entire book.
   const handleDeleteBook = async () => {
     if (!currentBook?._id) {
       setError("Book ID not found.");
@@ -316,28 +264,21 @@ Start writing your chapter content here...`,
         }
       );
 
-      // Clear the current book from BookContext
       clearBook();
-
-      // Go back to dashboard
       navigate("/dashboard");
     } catch (error) {
       console.error("Delete book error:", error);
 
-      const message =
+      setError(
         error.response?.data?.message ||
-        "Something went wrong while deleting the book.";
-
-      setError(message);
+          "Something went wrong while deleting the book."
+      );
     } finally {
       setDeleting(false);
     }
   };
 
-  // --------------------------------------------------
-  // AI generation
-  // --------------------------------------------------
-
+  // AI chapter generation with payment handling.
   const handleGenerateAI = async () => {
     if (!currentChapter) {
       setError("Please select a chapter first.");
@@ -358,8 +299,10 @@ Start writing your chapter content here...`,
     setSaved(false);
     setError("");
 
-    try {
-      const response = await axios.post(
+    // Send the chapter-generation request.
+    // Include paymentOrderId only after successful payment verification.
+    const requestChapterGeneration = (paymentOrderId = null) =>
+      axios.post(
         `${process.env.REACT_APP_API_URL}/api/ai/generate-chapter`,
         {
           title: currentBook.title,
@@ -369,6 +312,7 @@ Start writing your chapter content here...`,
           numberOfChapters: currentBook.numberOfChapters,
           writingStyle: currentBook.writingStyle,
           chapterTitle: currentChapter.title,
+          ...(paymentOrderId ? { paymentOrderId } : {}),
         },
         {
           headers: {
@@ -378,12 +322,40 @@ Start writing your chapter content here...`,
         }
       );
 
+    try {
+      let response;
+
+      try {
+        // The backend decides whether the user still has free generations.
+        response = await requestChapterGeneration();
+      } catch (requestError) {
+        const paymentIsRequired =
+          requestError.response?.status === 402 &&
+          requestError.response?.data?.paymentRequired === true &&
+          requestError.response?.data?.paymentType === "chapter";
+
+        // Don't open checkout for unrelated errors.
+        if (!paymentIsRequired) {
+          throw requestError;
+        }
+
+        // After the first four successful chapter generations, charge ₹10.
+        const paymentOrderId = await payForGeneration({
+          token,
+          paymentType: "chapter",
+        });
+
+        // Payment helper returns the order ID after backend verification.
+        response = await requestChapterGeneration(paymentOrderId);
+      }
+
       const generatedContent = response.data.content;
 
       if (!generatedContent) {
         throw new Error("No content was returned by the AI.");
       }
 
+      // Update only the currently selected chapter.
       setChapters((prevChapters) =>
         prevChapters.map((chapter) =>
           chapter.id === activeChapter
@@ -410,10 +382,7 @@ Start writing your chapter content here...`,
     }
   };
 
-  // --------------------------------------------------
-  // Word count
-  // --------------------------------------------------
-
+  // Calculate word count.
   const wordCount = currentChapter?.content
     ? currentChapter.content
         .trim()
@@ -421,10 +390,7 @@ Start writing your chapter content here...`,
         .filter(Boolean).length
     : 0;
 
-  // --------------------------------------------------
-  // If no book is loaded
-  // --------------------------------------------------
-
+  // Show a message if no book is loaded.
   if (!currentBook) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-white">
@@ -456,13 +422,9 @@ Start writing your chapter content here...`,
 
   return (
     <div className="flex h-screen flex-col bg-slate-950 text-white">
-
-      {/* ================= HEADER ================= */}
-
+      {/* Header */}
       <header className="flex h-16 shrink-0 items-center justify-between border-b border-white/10 px-5">
-
         <div className="flex items-center gap-4">
-
           <Link
             to="/dashboard"
             className="rounded-lg p-2 text-slate-400 transition hover:bg-white/5 hover:text-white"
@@ -471,7 +433,6 @@ Start writing your chapter content here...`,
           </Link>
 
           <div className="flex items-center gap-3">
-
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-600">
               <BookOpen size={19} />
             </div>
@@ -485,17 +446,11 @@ Start writing your chapter content here...`,
                 {chapters.length} chapters
               </p>
             </div>
-
           </div>
-
         </div>
 
-        {/* ================= HEADER ACTIONS ================= */}
-
+        {/* Header actions */}
         <div className="flex items-center gap-2 sm:gap-3">
-
-          {/* Saved indicator */}
-
           {saved && (
             <div className="hidden items-center gap-1 text-sm text-emerald-400 sm:flex">
               <Check size={16} />
@@ -503,24 +458,15 @@ Start writing your chapter content here...`,
             </div>
           )}
 
-          {/* Visibility */}
-
           <select
             value={visibility}
             onChange={handleVisibilityChange}
             className="rounded-lg border border-white/10 bg-slate-900 px-2.5 py-2 text-xs font-medium text-slate-300 outline-none transition hover:border-violet-500/40 focus:border-violet-500 sm:px-3 sm:text-sm"
             title="Book visibility"
           >
-            <option value="private">
-              🔒 Private
-            </option>
-
-            <option value="public">
-              🌍 Public
-            </option>
+            <option value="private">🔒 Private</option>
+            <option value="public">🌍 Public</option>
           </select>
-
-          {/* Preview */}
 
           <button
             onClick={() => navigate(`/preview/${currentBook._id}`)}
@@ -529,8 +475,6 @@ Start writing your chapter content here...`,
             <Eye size={17} />
             Preview
           </button>
-
-          {/* Delete Book */}
 
           <button
             onClick={handleDeleteBook}
@@ -542,24 +486,18 @@ Start writing your chapter content here...`,
             {deleting ? "Deleting..." : "Delete Book"}
           </button>
 
-          {/* Save */}
-
           <button
             onClick={handleSave}
             disabled={saving}
             className="flex items-center gap-2 rounded-lg bg-violet-600 px-3 py-2 text-sm font-medium transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-60 sm:px-4"
           >
             <Save size={16} />
-
             {saving ? "Saving..." : "Save"}
           </button>
-
         </div>
-
       </header>
 
-      {/* ================= VISIBILITY INFO ================= */}
-
+      {/* Visibility information */}
       {visibility === "public" && (
         <div className="border-b border-emerald-500/20 bg-emerald-500/5 px-5 py-2 text-center text-xs text-emerald-400">
           🌍 This book is set to Public. Other users can see it in Explore
@@ -573,30 +511,19 @@ Start writing your chapter content here...`,
         </div>
       )}
 
-      {/* ================= ERROR ================= */}
-
+      {/* Error message */}
       {error && (
         <div className="border-b border-red-500/20 bg-red-500/10 px-5 py-2.5 text-center text-sm text-red-400">
           {error}
         </div>
       )}
 
-      {/* ================= EDITOR ================= */}
-
       <div className="flex min-h-0 flex-1">
-
-        {/* ================= SIDEBAR ================= */}
-
+        {/* Sidebar */}
         <aside className="hidden w-72 shrink-0 border-r border-white/10 bg-slate-950 md:flex md:flex-col">
-
-          {/* Sidebar heading */}
-
           <div className="border-b border-white/10 p-5">
-
             <div className="flex items-center justify-between">
-
               <div>
-
                 <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                   Book Chapters
                 </p>
@@ -604,7 +531,6 @@ Start writing your chapter content here...`,
                 <p className="mt-1 text-sm text-slate-400">
                   {chapters.length} chapters
                 </p>
-
               </div>
 
               <button
@@ -614,19 +540,12 @@ Start writing your chapter content here...`,
               >
                 <Plus size={18} />
               </button>
-
             </div>
-
           </div>
 
-          {/* Chapter list */}
-
           <div className="flex-1 overflow-y-auto p-3">
-
             <div className="space-y-2">
-
               {chapters.map((chapter, index) => (
-
                 <button
                   key={chapter.id}
                   onClick={() => setActiveChapter(chapter.id)}
@@ -636,9 +555,7 @@ Start writing your chapter content here...`,
                       : "border border-transparent hover:bg-white/5"
                   }`}
                 >
-
                   <div className="mt-0.5 shrink-0">
-
                     <div
                       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-semibold ${
                         activeChapter === chapter.id
@@ -648,11 +565,9 @@ Start writing your chapter content here...`,
                     >
                       {String(index + 1).padStart(2, "0")}
                     </div>
-
                   </div>
 
                   <div className="min-w-0 flex-1">
-
                     <p
                       className={`line-clamp-2 text-sm font-medium ${
                         activeChapter === chapter.id
@@ -666,21 +581,13 @@ Start writing your chapter content here...`,
                     <p className="mt-1 text-xs text-slate-600">
                       Chapter {index + 1}
                     </p>
-
                   </div>
-
                 </button>
-
               ))}
-
             </div>
-
           </div>
 
-          {/* Add chapter */}
-
           <div className="border-t border-white/10 p-4">
-
             <button
               onClick={handleAddChapter}
               className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-white/15 py-2.5 text-sm text-slate-400 transition hover:border-violet-500/40 hover:text-violet-400"
@@ -688,28 +595,16 @@ Start writing your chapter content here...`,
               <Plus size={17} />
               Add Chapter
             </button>
-
           </div>
-
         </aside>
 
-        {/* ================= MAIN EDITOR ================= */}
-
+        {/* Main editor */}
         <main className="flex min-w-0 flex-1 flex-col">
-
-          {/* Editor toolbar */}
-
           <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-5 py-3">
-
             <div className="flex items-center gap-3">
-
-              <FileText
-                size={18}
-                className="text-violet-400"
-              />
+              <FileText size={18} className="text-violet-400" />
 
               <div>
-
                 <p className="text-sm font-medium">
                   {currentChapter?.title || "No Chapter Selected"}
                 </p>
@@ -717,15 +612,10 @@ Start writing your chapter content here...`,
                 <p className="text-xs text-slate-600">
                   Markdown Editor
                 </p>
-
               </div>
-
             </div>
 
             <div className="flex items-center gap-2">
-
-              {/* Delete chapter */}
-
               <button
                 onClick={handleDeleteChapter}
                 className="rounded-lg p-2 text-slate-500 transition hover:bg-red-500/10 hover:text-red-400"
@@ -735,50 +625,34 @@ Start writing your chapter content here...`,
                 <Trash2 size={18} />
               </button>
 
-              {/* Save */}
-
               <button
                 onClick={handleSave}
                 disabled={saving}
                 className="flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Save size={16} />
-
                 {saving ? "Saving..." : "Save"}
               </button>
-
             </div>
-
           </div>
 
           {/* Text editor */}
-
           <div className="flex-1 overflow-y-auto">
-
             <div className="mx-auto max-w-4xl px-6 py-8 lg:px-12">
-
               <textarea
                 value={currentChapter?.content || ""}
                 onChange={handleContentChange}
                 className="min-h-[600px] w-full resize-none bg-transparent text-[16px] leading-8 text-slate-200 outline-none placeholder:text-slate-600"
                 placeholder="Start writing your chapter..."
               />
-
             </div>
-
           </div>
 
           {/* Bottom toolbar */}
-
           <div className="shrink-0 border-t border-white/10 bg-slate-950 px-5 py-3">
-
             <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-
               <div className="flex items-center gap-5 text-xs text-slate-500">
-
-                <span>
-                  {wordCount} words
-                </span>
+                <span>{wordCount} words</span>
 
                 <span>
                   {currentChapter?.content.length || 0} characters
@@ -791,41 +665,29 @@ Start writing your chapter content here...`,
                   ) + 1}{" "}
                   of {chapters.length}
                 </span>
-
               </div>
-
-              {/* AI Generate */}
 
               <button
                 onClick={handleGenerateAI}
                 disabled={isGenerating || !currentChapter}
                 className="flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-semibold transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-60"
               >
-
                 {isGenerating ? (
                   <>
                     <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-
                     Generating...
                   </>
                 ) : (
                   <>
                     <Sparkles size={17} />
-
                     Generate with AI
                   </>
                 )}
-
               </button>
-
             </div>
-
           </div>
-
         </main>
-
       </div>
-
     </div>
   );
 }
