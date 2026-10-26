@@ -301,26 +301,28 @@ Start writing your chapter content here...`,
 
     // Send the chapter-generation request.
     // Include paymentOrderId only after successful payment verification.
-    const requestChapterGeneration = (paymentOrderId = null) =>
-      axios.post(
-        `${process.env.REACT_APP_API_URL}/api/ai/generate-chapter`,
-        {
-          title: currentBook.title,
-          topic: currentBook.topic,
-          description: currentBook.description,
-          targetAudience: currentBook.targetAudience,
-          numberOfChapters: currentBook.numberOfChapters,
-          writingStyle: currentBook.writingStyle,
-          chapterTitle: currentChapter.title,
-          ...(paymentOrderId ? { paymentOrderId } : {}),
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+    
+const requestChapterGeneration = (paymentOrderId = null) =>
+  axios.post(
+    `${process.env.REACT_APP_API_URL}/api/ai/generate-chapter`,
+    {
+      bookId: currentBook._id,
+      title: currentBook.title,
+      topic: currentBook.topic,
+      description: currentBook.description,
+      targetAudience: currentBook.targetAudience,
+      numberOfChapters: currentBook.numberOfChapters,
+      writingStyle: currentBook.writingStyle,
+      chapterTitle: currentChapter.title,
+      ...(paymentOrderId ? { paymentOrderId } : {}),
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    }
+  );
 
     try {
       let response;
@@ -343,6 +345,7 @@ Start writing your chapter content here...`,
         const paymentOrderId = await payForGeneration({
           token,
           paymentType: "chapter",
+          bookId: currentBook._id,
         });
 
         // Payment helper returns the order ID after backend verification.

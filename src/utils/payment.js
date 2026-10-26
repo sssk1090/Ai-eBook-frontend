@@ -39,6 +39,7 @@ export const payForGeneration = async ({
   token,
   paymentType,
   chapterCount,
+  bookId,
 }) => {
   if (!token) {
     throw new Error("Please log in before making a payment.");
@@ -48,15 +49,17 @@ export const payForGeneration = async ({
     throw new Error("Invalid payment type.");
   }
 
+  // A book ID is required for chapter payments.
+  if (paymentType === "chapter" && !bookId) {
+    throw new Error("A book ID is required for chapter payments.");
+  }
+
   // An outline payment is needed only for more than 4 chapters.
   // Pricing: (chapter count - 4) * ₹5.
   if (paymentType === "outline") {
     const count = Number(chapterCount);
 
-    if (
-      !Number.isInteger(count) ||
-      count <= 4
-    ) {
+    if (!Number.isInteger(count) || count <= 4) {
       throw new Error(
         "A paid outline requires more than 4 chapters."
       );
@@ -65,15 +68,15 @@ export const payForGeneration = async ({
 
   await loadRazorpay();
 
-  // Ask the backend to create the order.
-  // The backend must calculate and validate the actual amount.
+  // Ask the backend to create the payment order.
+  // The backend calculates and validates the actual amount.
   const response = await axios.post(
     `${API_BASE_URL}/api/payments/create-order`,
     {
       paymentType,
       ...(paymentType === "outline"
         ? { chapterCount: Number(chapterCount) }
-        : {}),
+        : { bookId }),
     },
     {
       headers: {
