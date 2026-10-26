@@ -36,13 +36,61 @@ function Signup() {
     setError("");
   };
 
+  // JavaScript validation
+  const validateSignup = () => {
+    const fullName = signupData.fullName.trim();
+    const email = signupData.email.trim();
+    const password = signupData.password;
+
+    if (!fullName) {
+      setError("Please enter your full name.");
+      return false;
+    }
+
+    if (fullName.length < 2) {
+      setError("Full name must be at least 2 characters long.");
+      return false;
+    }
+
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!email) {
+      setError("Please enter your email address.");
+      return false;
+    }
+
+    if (!emailPattern.test(email)) {
+      setError("Please enter a valid email address.");
+      return false;
+    }
+
+    if (!password) {
+      setError("Please enter a password.");
+      return false;
+    }
+
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters long.");
+      return false;
+    }
+
+    return true;
+  };
+
   const handleSignup = async (e) => {
     e.preventDefault();
 
     setError("");
+
+    // Stop signup if validation fails
+    if (!validateSignup()) {
+      return;
+    }
+
     setLoading(true);
 
     try {
+      // Existing API call - unchanged
       const response = await axios.post(
         `${process.env.REACT_APP_API_URL}/api/auth/signup`,
         signupData
@@ -74,9 +122,7 @@ function Signup() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
-
       <div className="flex min-h-screen items-center justify-center px-6 py-12">
-
         <div className="w-full max-w-md">
 
           {/* Logo */}
@@ -92,9 +138,7 @@ function Signup() {
           </Link>
 
           <div className="rounded-2xl border border-white/10 bg-white/5 p-8">
-
             <div className="mb-8">
-
               <h1 className="text-3xl font-bold">
                 Create your account
               </h1>
@@ -102,23 +146,20 @@ function Signup() {
               <p className="mt-2 text-slate-400">
                 Start creating your first AI-powered eBook.
               </p>
-
             </div>
 
             <form
               onSubmit={handleSignup}
               className="space-y-5"
+              noValidate
             >
-
               {/* Name */}
               <div>
-
                 <label className="mb-2 block text-sm font-medium text-slate-300">
                   Full name
                 </label>
 
                 <div className="relative">
-
                   <User
                     size={18}
                     className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"
@@ -130,23 +171,18 @@ function Signup() {
                     value={signupData.fullName}
                     onChange={handleChange}
                     placeholder="Your name"
-                    required
                     className="w-full rounded-xl border border-white/10 bg-white/5 py-3.5 pl-11 pr-4 text-white outline-none placeholder:text-slate-600 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20"
                   />
-
                 </div>
-
               </div>
 
               {/* Email */}
               <div>
-
                 <label className="mb-2 block text-sm font-medium text-slate-300">
                   Email address
                 </label>
 
                 <div className="relative">
-
                   <Mail
                     size={18}
                     className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"
@@ -154,27 +190,22 @@ function Signup() {
 
                   <input
                     name="email"
-                    type="email"
+                    type="text"
                     value={signupData.email}
                     onChange={handleChange}
                     placeholder="you@example.com"
-                    required
                     className="w-full rounded-xl border border-white/10 bg-white/5 py-3.5 pl-11 pr-4 text-white outline-none placeholder:text-slate-600 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20"
                   />
-
                 </div>
-
               </div>
 
               {/* Password */}
               <div>
-
                 <label className="mb-2 block text-sm font-medium text-slate-300">
                   Password
                 </label>
 
                 <div className="relative">
-
                   <Lock
                     size={18}
                     className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"
@@ -186,12 +217,9 @@ function Signup() {
                     value={signupData.password}
                     onChange={handleChange}
                     placeholder="Create a password"
-                    required
                     className="w-full rounded-xl border border-white/10 bg-white/5 py-3.5 pl-11 pr-4 text-white outline-none placeholder:text-slate-600 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20"
                   />
-
                 </div>
-
               </div>
 
               {/* Error */}
@@ -211,11 +239,9 @@ function Signup() {
 
                 {!loading && <ArrowRight size={18} />}
               </button>
-
             </form>
 
             <p className="mt-7 text-center text-sm text-slate-400">
-
               Already have an account?
 
               <Link
@@ -224,15 +250,10 @@ function Signup() {
               >
                 Sign in
               </Link>
-
             </p>
-
           </div>
-
         </div>
-
       </div>
-
     </div>
   );
 }
